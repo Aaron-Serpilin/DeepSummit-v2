@@ -5,4 +5,6 @@ docs/design/
 .DS_Store
 .idea
 tmp
+CLAUDE.local.md
+CLAUDE.md
 __pycache__/
