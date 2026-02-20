@@ -1,0 +1,11 @@
+.env
+.venv
+.claude
+docs/design/
+CLAUDE.md
+.DS_Store
+.idea
+tmp
+__pycache__/
+app.yaml
+cred.json

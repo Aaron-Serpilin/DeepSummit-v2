@@ -1,0 +1,8 @@
+.env
+.venv
+.claude
+docs/design/
+.DS_Store
+.idea
+tmp
+__pycache__/
