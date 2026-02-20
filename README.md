@@ -8,7 +8,7 @@ DeepSummit uses a unified multimodal transformer to estimate the probability of 
 
 ## System Architecture
 
-![System Architecture](docs/diagrams/01_system_architecture.png)
+<img src="docs/diagrams/01_system_architecture.png" alt="System Architecture" width="700">
 
 DeepSummit runs on GCP Cloud Run with serverless inference, PostgreSQL + pgvector for data storage, Redis for weather caching, and Pub/Sub for event-driven workflows.
 
@@ -27,7 +27,7 @@ You select a peak on the globe, choose a route and target date, fill in your tea
 
 ### Inference Flow
 
-![Inference Request Flow](docs/diagrams/02_inference_flow.png)
+<img src="docs/diagrams/02_inference_flow.png" alt="Inference Request Flow" width="600">
 
 Each prediction request flows through validation, rate limiting, weather cache (Redis → Open-Meteo if miss), feature tensor construction, model inference (BentoML), and SHAP/attention extraction—all in under 500ms.
 
@@ -59,7 +59,7 @@ All 14 eight-thousanders across three ranges:
 
 ## Model Architecture
 
-![Unified Multimodal Transformer](docs/diagrams/04_ml_architecture.png)
+<img src="docs/diagrams/04_ml_architecture.png" alt="Unified Multimodal Transformer" width="650">
 
 The core ML system uses a single unified transformer that jointly attends over ~635 tokens: tabular expedition features (per-feature tokenization) and multi-scale weather sequences (7-day, 30-day, 90-day windows). Flash Attention 2 enables efficient cross-modal attention, with SHAP and attention weights extracted for explainability.
 
@@ -84,7 +84,7 @@ The core ML system uses a single unified transformer that jointly attends over ~
 
 ### Database Schema
 
-![Database Schema](docs/diagrams/05_database_schema.png)
+<img src="docs/diagrams/05_database_schema.png" alt="Database Schema" width="700">
 
 PostgreSQL with pgvector extension stores peaks, routes, expeditions, expedition members, weather cache, and expedition embeddings. Relational structure enables efficient queries while pgvector supports similarity search for "find similar expeditions" features.
 
@@ -106,7 +106,7 @@ DeepSummit v1 was a bachelor's thesis achieving ~90% accuracy on Himalayan exped
 
 ### Training Pipeline
 
-![Training Pipeline](docs/diagrams/03_training_pipeline.png)
+<img src="docs/diagrams/03_training_pipeline.png" alt="Training Pipeline" width="600">
 
 Data flows from the Himalayan Database and Open-Meteo API through Pandera validation into CloudSQL. The PyTorch training loop uses W&B for experiment tracking, with hyperparameter sweeps searching over model dimensions, attention heads, and regularization. Models passing the performance gate (≥88% accuracy, ≤500ms latency) are packaged with BentoML and deployed via Cloud Build.
 
