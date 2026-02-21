@@ -1,12 +1,62 @@
-.env
-.venv
+# Private Documentation
 .claude
 docs/design/
+docs/documentation/
 CLAUDE.md
 CLAUDE.local.md
-.DS_Store
-.idea
-tmp
-__pycache__/
 app.yaml
 cred.json
+
+# Environment
+.env
+.env.local
+.venv
+
+# Database persistence
+data/
+postgres_data/
+redis_data/
+*.db
+dump.rdb
+
+# Python cache
+.pytest_cache/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ML artifacts
+wandb/
+models/
+checkpoints/
+*.ckpt
+*.pth
+*.pt
+
+# Backups (local copies)
+backups/
+*.sql.gz
+*.sql
+*.backup
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+tmp/
