@@ -22,22 +22,23 @@ services:
       - deepsummit_network
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: deepsummit_redis
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./data/redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks:
-      - deepsummit_network
-    restart: unless-stopped
+  # Redis caching will only be needed once in production
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: deepsummit_redis
+  #   command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - ./data/redis:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+  #   networks:
+  #     - deepsummit_network
+  #   restart: unless-stopped
 
 networks:
   deepsummit_network:
