@@ -1,2 +1,7 @@
 # Diagrams
 matplotlib
+
+# Himalayan Database SQL .xls file processing
+python_calamine
+pandas
+xlrd

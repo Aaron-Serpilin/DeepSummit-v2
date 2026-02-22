@@ -1,6 +1,7 @@
 # Private Documentation
 .claude
 docs/design/
+docs/plans/
 docs/documentation/
 CLAUDE.md
 CLAUDE.local.md
@@ -13,7 +14,9 @@ cred.json
 .venv
 
 # Database persistence
-data/
+data/*
+!data/himalayas/
+!data/himalayas/**
 postgres_data/
 redis_data/
 *.db
