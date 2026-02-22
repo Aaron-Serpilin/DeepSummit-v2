@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session
 
 log = structlog.get_logger()
 
-
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
-    """Create and cache a SQLAlchemy engine. Reads DATABASE_URL from environment."""
+    """
+    Create and cache a SQLAlchemy engine. Reads DATABASE_URL from environment.
+    """
+
     url = os.environ.get("DATABASE_URL")
     if url is None:
         raise RuntimeError("DATABASE_URL environment variable is not set")
@@ -29,7 +31,8 @@ def get_engine() -> Engine:
 
 
 def load_expedition(session: Session, expedition_id: int) -> dict | None:
-    """Load expedition with its members from PostgreSQL.
+    """
+    Load expedition with its members from PostgreSQL.
 
     Returns a dict ready for the embedder, or None if the expedition doesn't exist.
     """
@@ -67,7 +70,8 @@ def upsert_embedding(
     vector: np.ndarray,
     model_version: str,
 ) -> None:
-    """UPSERT a 512-dim embedding into expedition_embeddings.
+    """
+    UPSERT a 512-dim embedding into expedition_embeddings.
 
     Does NOT commit — the caller (pipeline.process) is responsible for committing.
     This keeps the batch atomic: all embeddings commit together or not at all.

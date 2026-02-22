@@ -4,3 +4,7 @@ embedding_pipeline.egg-info/SOURCES.txt
 embedding_pipeline.egg-info/dependency_links.txt
 embedding_pipeline.egg-info/requires.txt
 embedding_pipeline.egg-info/top_level.txt
+tests/test_api.py
+tests/test_db.py
+tests/test_embedder.py
+tests/test_pipeline.py

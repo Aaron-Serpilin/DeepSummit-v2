@@ -5,7 +5,6 @@ import numpy as np
 # The function signature and MODEL_VERSION constant stay — only the body changes.
 MODEL_VERSION = "stub-v0"
 
-
 def compute(expedition: dict) -> np.ndarray:
     """Compute a 512-dim unit-normalised embedding for an expedition.
 

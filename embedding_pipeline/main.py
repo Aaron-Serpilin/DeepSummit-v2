@@ -14,7 +14,9 @@ log = structlog.get_logger()
 
 
 def get_session() -> Generator[Session, None, None]:
-    """FastAPI dependency that yields a DB session per request."""
+    """
+    FastAPI dependency that yields a DB session per request.
+    """
     with Session(db.get_engine()) as session:
         yield session
 
@@ -24,7 +26,8 @@ async def handle_pubsub(
     request: Request,
     session: Session = Depends(get_session),
 ) -> None:
-    """Receive a Pub/Sub push message and process the embedded expedition IDs.
+    """
+    Receive a Pub/Sub push message and process the embedded expedition IDs.
 
     Returns 204 to acknowledge the message. Returning non-2xx causes Pub/Sub
     to retry, so only raise on unrecoverable errors (bad message format).

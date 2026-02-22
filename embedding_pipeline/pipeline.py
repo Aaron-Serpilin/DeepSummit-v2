@@ -6,9 +6,9 @@ import embedder
 
 log = structlog.get_logger()
 
-
 def process(session: Session, expedition_ids: list[int]) -> None:
-    """For each expedition ID: load → embed → upsert. Commits once after the batch.
+    """
+    For each expedition ID: load → embed → upsert. Commits once after the batch.
 
     Skips IDs that no longer exist in the DB (logs a warning).
     Raises on DB write failure so Pub/Sub retries the batch.

@@ -4,11 +4,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://deepsummit:deepsummit_password@localhost:5432/deepsummit_psql_db_dev",
-)
-
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 @pytest.fixture(scope="session")
 def engine():

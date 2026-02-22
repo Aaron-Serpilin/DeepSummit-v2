@@ -1,12 +1,13 @@
 # Server
-fastapi
-uvicorn[standard]
-psycopg2-binary
-sqlalchemy
-pgvector
-numpy
-structlog
-pydantic
+fastapi>=0.110
+uvicorn[standard]>=0.27
+psycopg2-binary>=2.9
+structlog>=24.0
+pydantic>=2.0
+httpx>=0.27
+
+# Libraries
+numpy>=1.26
 
 # Diagrams
 matplotlib
@@ -18,3 +19,6 @@ xlrd
 
 # Databases
 psql
+sqlalchemy>=2.0
+sqlmodel>=0.0.14
+pgvector>=0.2
