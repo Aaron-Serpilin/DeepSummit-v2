@@ -1,3 +1,13 @@
+# Server
+fastapi
+uvicorn[standard]
+psycopg2-binary
+sqlalchemy
+pgvector
+numpy
+structlog
+pydantic
+
 # Diagrams
 matplotlib
 
@@ -5,3 +15,6 @@ matplotlib
 python_calamine
 pandas
 xlrd
+
+# Databases
+psql
