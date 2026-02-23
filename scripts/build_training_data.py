@@ -11,8 +11,10 @@ Usage:
 
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from threading import Lock
 
 import pandas as pd
 from tqdm import tqdm
@@ -138,8 +140,17 @@ def compute_experience_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
-    """Fetch weather for unique (peakid, smtdate) pairs with resume capability"""
+def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd.DataFrame:
+    """
+    Fetch weather for unique (peakid, smtdate) pairs with parallel workers.
+
+    Args:
+        df: DataFrame with expedition data
+        max_workers: Number of parallel workers for API calls (default 10)
+
+    Returns:
+        DataFrame with weather_path column added
+    """
     df = df.copy()
 
     # Get unique peak+date combinations
@@ -147,6 +158,7 @@ def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
         subset=["peakid", "smtdate"]
     )
     logger.info(f"Need weather for {len(unique_weather)} unique peak+date combinations")
+    logger.info(f"Using {max_workers} parallel workers")
 
     # Track weather paths
     weather_paths: dict[tuple[str, str], str] = {}
@@ -158,73 +170,94 @@ def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
     progress_file = OUTPUT_DIR / "weather_fetch_progress.txt"
     completed_keys = set()
 
+    # Thread-safe lock for writing progress
+    progress_lock = Lock()
+
     if progress_file.exists():
-        with open(progress_file, "r") as f:
+        with open(progress_file) as f:
             completed_keys = set(line.strip() for line in f)
         logger.info(f"Resuming: {len(completed_keys)} already completed")
 
-    for _, row in tqdm(
-        unique_weather.iterrows(),
-        total=len(unique_weather), 
-        desc="Fetching weather"
-    ):
-        peakid = row["peakid"]
-        smtdate_str = row["smtdate"]
+    def process_weather_row(row_data):
+        """Worker function to process a single weather fetch."""
+        peakid, smtdate_str, lat, lon = row_data
         progress_key = f"{peakid}_{smtdate_str}"
 
         # Skip if already completed
         if progress_key in completed_keys:
-            cached += 1
-            weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate}.csv"
-            continue
-
-        lat = row["latitude"]
-        lon = row["longitude"]
+            return ("cached", peakid, smtdate_str, None)
 
         try:
             smtdate = datetime.strptime(smtdate_str, "%Y-%m-%d").date()
         except (ValueError, TypeError):
             logger.warning(f"Invalid date format: {smtdate_str}")
-            failed += 1
-            continue
+            return ("failed", peakid, smtdate_str, "Invalid date")
 
         # Check cache first
         cached_data = get_cached_weather(peakid, smtdate)
         if cached_data is not None:
-            weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate}.csv"
-            cached += 1
-
             # Mark as completed
-            with open(progress_file, "a") as f:
-                f.write(f"{progress_key}\n")
-            completed_keys.add(progress_key)
-            continue
+            with progress_lock:
+                with open(progress_file, "a") as f:
+                    f.write(f"{progress_key}\n")
+                completed_keys.add(progress_key)
+            return ("cached", peakid, smtdate_str, None)
 
-        # Fetch from API
+        # Fetch from API (with retry logic built in)
         raw_weather = fetch_weather_window(lat, lon, smtdate, window_days=90)
 
         if not raw_weather.empty:
             # Build multi-scale windows and concatenate
             windows = build_multiscale_windows(raw_weather, smtdate)
             combined = pd.concat(
-                [
-                    windows["7d"],
-                    windows["30d"],
-                    windows["90d"],
-                ],
-                ignore_index=True,
+                [windows["7d"], windows["30d"], windows["90d"]], ignore_index=True
             )
 
             save_weather_cache(combined, peakid, smtdate)
-            weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate}.csv"
-            fetched += 1
 
             # Mark as completed
-            with open(progress_file, "a") as f:
-                f.write(f"{progress_key}\n")
-            completed_keys.add(progress_key)
+            with progress_lock:
+                with open(progress_file, "a") as f:
+                    f.write(f"{progress_key}\n")
+                completed_keys.add(progress_key)
+
+            return ("fetched", peakid, smtdate_str, None)
         else:
-            failed += 1
+            return ("failed", peakid, smtdate_str, "Empty response")
+
+    # Prepare work items
+    work_items = [
+        (row["peakid"], row["smtdate"], row["latitude"], row["longitude"])
+        for _, row in unique_weather.iterrows()
+    ]
+
+    # Process in parallel with progress bar
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        futures = {executor.submit(process_weather_row, item): item for item in work_items}
+
+        # Process results as they complete
+        with tqdm(total=len(futures), desc="Fetching weather") as pbar:
+            for future in as_completed(futures):
+                try:
+                    status, peakid, smtdate_str, error = future.result()
+
+                    if status == "cached":
+                        cached += 1
+                        weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate_str[:10]}.csv"
+                    elif status == "fetched":
+                        fetched += 1
+                        weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate_str[:10]}.csv"
+                    elif status == "failed":
+                        failed += 1
+                        if error:
+                            logger.debug(f"Failed {peakid}_{smtdate_str}: {error}")
+
+                except Exception as e:
+                    logger.error(f"Worker error: {e}")
+                    failed += 1
+
+                pbar.update(1)
 
     logger.info(f"Weather fetch complete: {cached} cached, {fetched} fetched, {failed} failed")
 
