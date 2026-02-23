@@ -29,6 +29,8 @@ This repo uses **Conventional Commits** prefixed with an emoji signal. Every com
 | 🧪 | `test` | Adding or fixing tests |
 | 🚀 | `ci` | GitHub Actions, Cloud Build, deployment config |
 | ⚡ | `perf` | Performance improvement |
+| 📚 | `docs` | Documentation, README, guides, comments |
+| 🗂️ | `data` | Dataset changes, enrichment, preprocessing output |
 
 ---
 
@@ -63,6 +65,14 @@ This repo uses **Conventional Commits** prefixed with an emoji signal. Every com
 # Performance
 ⚡ perf(inference): reduce feature tensor construction time by 40%
 ⚡ perf(weather): switch Redis serialisation from JSON to MessagePack
+
+# Documentation
+📚 docs(training-pipeline): add complete workflow guide with data flow diagrams
+📚 docs(api): add OpenAPI schema and example requests to README
+
+# Data
+🗂️ data(peaks): enrich peaks_clean.csv with latitude/longitude coordinates
+🗂️ data(training): regenerate features.csv after fixing experience feature calculation
 ```
 
 ---

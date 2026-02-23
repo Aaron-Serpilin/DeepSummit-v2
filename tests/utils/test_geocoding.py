@@ -1,7 +1,6 @@
 """Tests for geocoding utilities."""
 
 import pandas as pd
-import pytest
 
 from utils.geocoding import geocode_peak, geocode_peaks_batch
 

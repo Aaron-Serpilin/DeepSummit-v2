@@ -2,7 +2,6 @@
 .claude
 docs/design/
 docs/plans/
-docs/documentation/
 CLAUDE.md
 CLAUDE.local.md
 app.yaml
