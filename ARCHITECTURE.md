@@ -6,7 +6,7 @@ This document covers the high-level system design, component relationships, and 
 
 ## System Overview
 
-DeepSummit is a serverless ML system deployed on GCP. All services run on Cloud Run (scale-to-zero, pay-per-request). The system has five runtime components and an async event pipeline:
+DeepSummit is a serverless ML system deployed on GCP. All services run on Cloud Run (scale-to-zero, pay-per-request). The system has three runtime components:
 
 ```
                         ┌──────────────────────────────┐
@@ -18,31 +18,24 @@ DeepSummit is a serverless ML system deployed on GCP. All services run on Cloud 
                         ┌──────────────▼───────────────┐
                         │  FastAPI  (Cloud Run)         │
                         │  REST API + auth + rate limit │
-                        └────┬─────────┬───────────────┘
-                             │         │
-               ┌─────────────▼─┐   ┌───▼──────────────┐
-               │  PostgreSQL   │   │  Redis            │
-               │  + pgvector   │   │  (weather cache)  │
-               └───────────────┘   └───────────────────┘
-                             │
-                   ┌─────────▼────────────┐
-                   │  BentoML  (Cloud Run) │
-                   │  Inference service    │
-                   │  (internal only)      │
-                   └──────────────────────┘
+                        └────────┬──────────┬───────────┘
+                                 │          │
+               ┌─────────────────▼──┐   ┌───▼──────────────┐
+               │  BentoML           │   │  Redis            │
+               │  (Cloud Run)       │   │  (weather cache)  │
+               │  internal only     │   └───────┬───────────┘
+               └────────────────────┘           │
+                                        ┌────────▼──────────┐
+                                        │  Open-Meteo API   │
+                                        │  ERA5 + forecast  │
+                                        └───────────────────┘
 
-                   Pub/Sub (async)
-                        │
-          ┌─────────────┴─────────────┐
-          │                           │
- ┌────────▼──────────┐   ┌────────────▼──────────┐
- │  Embedding        │   │  Monitoring           │
- │  Pipeline         │   │  (Evidently AI)       │
- │  (Cloud Run)      │   │  (Cloud Run, daily)   │
- └───────────────────┘   └───────────────────────┘
+Training (offline):
+    data/himalayas/*.csv
+        └── build_training_data.py → GCS → BentoML checkpoint
 ```
 
-The API service is the only public-facing backend endpoint. The inference service has no public URL and is called internally. Redis sits between the API and the weather data source to eliminate Open-Meteo latency at prediction time.
+The API is the only public-facing backend. The inference service has no public URL and is called via Cloud Run internal networking. Redis sits between the API and Open-Meteo to eliminate weather API latency at prediction time.
 
 ---
 
@@ -62,7 +55,7 @@ Request
   │      Redis MISS → Open-Meteo API (~100ms) → cache with 1h TTL
   │
   ├─ 5. Build feature tensors
-  │      Tabular features
+  │      Tabular features (from request body)
   │      7-day / 30-day / 90-day weather windows
   │
   ├─ 6. Call inference service (internal HTTP)
@@ -128,25 +121,44 @@ Weather tokens are position-encoded with **Time2Vec**: a learned encoding with o
 
 ## Data Architecture
 
-### PostgreSQL Schema (Summary)
+### Training Data (CSV)
 
-Six tables store all relational data and embeddings:
+All training data comes from the Himalayan Database (HDB). Three clean CSVs produced by `scripts/preprocess_hdb.py`:
 
 ```
-peaks ──< routes ──< expeditions ──< expedition_members
-  │                      │
-  └──< weather_cache      └──< expedition_embeddings (vector(512))
+data/himalayas/
+├── expeditions_clean.csv   — one row per expedition
+│     expid, peakid, year, season, route1, totmembers, smtmembers, smtdate,
+│     success, termreason, highpoint, o2used, commercial, camps, style
+│
+├── members_clean.csv       — one row per climber per expedition
+│     expid, membid, peakid, myear, fname, lname, sex, age, nationality,
+│     oxygen_used, summit_reached, died, highpt_m, hired, sherpa
+│
+└── peaks_clean.csv         — HDB reference data for all Himalayan peaks
+      peakid, pkname, heightm, himal, location
 ```
 
-`expedition_embeddings` uses **pgvector** with an IVFFlat index for approximate nearest-neighbour search — enabling "similar past expeditions" lookups in the results view.
+`scripts/build_training_data.py` joins these files and builds a flat feature matrix:
+
+```
+expeditions_clean.csv ─┐
+members_clean.csv      ─┼─→ feature engineering → data/training/features.csv
+Open-Meteo weather     ─┘                          data/training/weather/
+```
+
+Weather windows are fetched from Open-Meteo during training data construction and cached as CSVs. `utils/pubsub.py` can fan out parallel API calls across peaks to speed this up.
+
+### Peaks Reference Data
+
+The 14 eight-thousanders are hardcoded in the API as a static Python dict. They never change. No database is needed for static reference data.
 
 ### Weather Data
 
-Weather is sourced from **Open-Meteo**, which provides free access to ERA5 reanalysis data (1940–present) and forecasts across 55+ variables at ~100ms latency. All fetched data is:
-1. Stored in Redis with a 1-hour TTL (fast repeated access)
-2. Persisted to PostgreSQL (historical archive, avoids re-fetching)
+Open-Meteo provides free access to ERA5 reanalysis data (1940–present) and forecasts across 55+ variables at ~100ms latency.
 
-At prediction time, weather data is always served from cache — the model never waits on an external API call during inference.
+- **Training**: fetched once per peak × date range and cached as CSVs in GCS
+- **Inference**: fetched live and cached in Redis (1-hour TTL) — the model never waits on an external API call during a prediction
 
 ---
 
@@ -157,6 +169,20 @@ At prediction time, weather data is always served from cache — the model never
 v1 used SAINT (tabular) and Stormer (meteorological) as separate encoders with an MLP fusion layer. This required two forward passes, introduced an artificial bottleneck at the fusion point, and made cross-modal interaction impossible within each encoder.
 
 v2 uses a single transformer where tabular and weather tokens coexist from layer one. The model attends freely across modalities, learns its own fusion strategy, and produces a single forward pass — simpler, faster, and more expressive.
+
+### No database
+
+This is a classification model: features → transformer → probability. There is no similarity search, no retrieval step, and no need to store historical expedition data in a queryable form at runtime. Training data lives in CSVs; the trained model is all that's needed at inference time. The 14 peaks are static and are hardcoded directly in the API.
+
+This removes CloudSQL, pgvector, and SQLModel from the stack entirely, eliminating the largest operational cost and complexity in v1.
+
+### CSV-first training data
+
+Rather than loading training data from a live database during each training run (which requires a running DB, migrations, and connection management), all training data is materialised as CSV files in GCS. Training scripts read from GCS directly — reproducible, portable, and runnable on any machine with GCS credentials.
+
+### Redis-only weather caching
+
+At inference time, weather is fetched from Open-Meteo and stored in Redis with a 1-hour TTL. No persistent weather store is needed — the ERA5 archive on Open-Meteo is the source of truth, and cache misses just re-fetch. This replaces the two-layer caching (Redis + PostgreSQL) from the original design with a simpler single layer.
 
 ### Cloud Run over Kubernetes
 
@@ -174,22 +200,11 @@ BentoML packages the model, preprocessing pipeline, and SHAP computation into a 
 
 v1 downloaded ERA5 data directly, which took 30–60 minutes per inference. Open-Meteo wraps ERA5 (and more) in a free REST API with ~100ms response times. The data is identical; the latency drops by four orders of magnitude.
 
-### Redis + PostgreSQL dual caching
-
-Redis handles the hot path (sub-millisecond reads for recent weather). PostgreSQL stores the full historical archive. This avoids re-fetching data for peaks and date ranges already in the system, which matters for batch training runs as much as for inference.
-
 ---
 
-## Async Pipeline
+## Monitoring
 
-Two Pub/Sub topics decouple the synchronous request path from background work:
-
-| Topic | Published by | Consumed by | Purpose |
-|-------|-------------|-------------|---------|
-| `expedition-data-added` | Data ingestion scripts | Embedding pipeline | Compute and store vector(512) embeddings for new expeditions |
-| `prediction-logged` | API service (async) | Monitoring service | Feed Evidently AI drift detection |
-
-The monitoring service runs on a Cloud Scheduler daily trigger. It loads the reference distribution (training data statistics) and the current prediction window, computes feature and prediction drift (Population Stability Index), and fires a W&B alert if PSI > 0.2.
+A Cloud Run monitoring service runs on a daily Cloud Scheduler trigger. It loads the training data baseline statistics and the current prediction window, computes feature and prediction drift (Population Stability Index via Evidently AI), and fires a W&B alert if PSI > 0.2.
 
 ---
 
@@ -205,7 +220,7 @@ PR opened
 
 Merge to main
   └── Cloud Build
-        ├── Build Docker images (backend, ml, embedding-pipeline, frontend)
+        ├── Build Docker images (backend, ml, frontend)
         ├── Push to Artifact Registry
         ├── Deploy to Cloud Run — canary (10% traffic)
         ├── Wait 10 minutes + health checks
@@ -213,4 +228,4 @@ Merge to main
         └── Smoke tests against production
 ```
 
-The model performance gate in CI ensures that no deployment regresses below the accuracy threshold established in v1.
+The model performance gate in CI ensures that no deployment regresses below the accuracy threshold established at initial training.
