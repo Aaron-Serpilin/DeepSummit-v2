@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 REQUEST_DELAY = 0.1  # 100ms between requests
+DEFAULT_CACHE_DIR = Path(__file__).parent.parent / "data" / "training" / "weather"
 
 # Weather variables to fetch — comprehensive set for mountaineering
 DAILY_VARIABLES = [
@@ -149,3 +150,40 @@ def build_multiscale_windows(
         "30d": df_30d,
         "90d": df_90d,
     }
+
+
+def get_weather_cache_path(
+    peakid: str,
+    target_date: date,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+) -> Path:
+    """Get the cache file path for a peak+date combination."""
+    return cache_dir / f"{peakid}_{target_date.isoformat()}.csv"
+
+
+def get_cached_weather(
+    peakid: str,
+    target_date: date,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+) -> pd.DataFrame | None:
+    """Load cached weather data if available."""
+    cache_path = get_weather_cache_path(peakid, target_date, cache_dir)
+    if cache_path.exists():
+        try:
+            return pd.read_csv(cache_path)
+        except Exception as e:
+            logger.warning(f"Failed to load cache {cache_path}: {e}")
+    return None
+
+
+def save_weather_cache(
+    weather_df: pd.DataFrame,
+    peakid: str,
+    target_date: date,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+) -> None:
+    """Save weather data to cache."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = get_weather_cache_path(peakid, target_date, cache_dir)
+    weather_df.to_csv(cache_path, index=False)
+    logger.debug(f"Cached weather to {cache_path}")
