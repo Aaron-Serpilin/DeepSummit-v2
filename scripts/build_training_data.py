@@ -139,7 +139,7 @@ def compute_experience_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
-    """Fetch weather for unique (peakid, smtdate) pairs."""
+    """Fetch weather for unique (peakid, smtdate) pairs with resume capability"""
     df = df.copy()
 
     # Get unique peak+date combinations
@@ -154,11 +154,30 @@ def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
     cached = 0
     failed = 0
 
+    # Progress tracking file
+    progress_file = OUTPUT_DIR / "weather_fetch_progress.txt"
+    completed_keys = set()
+
+    if progress_file.exists():
+        with open(progress_file, "r") as f:
+            completed_keys = set(line.strip() for line in f)
+        logger.info(f"Resuming: {len(completed_keys)} already completed")
+
     for _, row in tqdm(
-        unique_weather.iterrows(), total=len(unique_weather), desc="Fetching weather"
+        unique_weather.iterrows(),
+        total=len(unique_weather), 
+        desc="Fetching weather"
     ):
         peakid = row["peakid"]
         smtdate_str = row["smtdate"]
+        progress_key = f"{peakid}_{smtdate_str}"
+
+        # Skip if already completed
+        if progress_key in completed_keys:
+            cached += 1
+            weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate}.csv"
+            continue
+
         lat = row["latitude"]
         lon = row["longitude"]
 
@@ -174,6 +193,11 @@ def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
         if cached_data is not None:
             weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate}.csv"
             cached += 1
+
+            # Mark as completed
+            with open(progress_file, "a") as f:
+                f.write(f"{progress_key}\n")
+            completed_keys.add(progress_key)
             continue
 
         # Fetch from API
@@ -194,6 +218,11 @@ def fetch_weather_for_expeditions(df: pd.DataFrame) -> pd.DataFrame:
             save_weather_cache(combined, peakid, smtdate)
             weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate}.csv"
             fetched += 1
+
+            # Mark as completed
+            with open(progress_file, "a") as f:
+                f.write(f"{progress_key}\n")
+            completed_keys.add(progress_key)
         else:
             failed += 1
 
@@ -286,8 +315,14 @@ def select_output_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df[existing_cols]
 
 
-def main() -> None:
+def main(request_delay: float = 0.5) -> None:
     """Build training data pipeline."""
+
+    # Override global delay if specified
+    import utils.weather as weather_module
+    weather_module.REQUEST_DELAY = request_delay
+
+
     logger.info("Starting training data build")
 
     # Load data
@@ -347,4 +382,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    delay = float(sys.argv[1]) if len(sys.argv) > 1 else 0.5
+    main(request_delay=delay)

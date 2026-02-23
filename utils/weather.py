@@ -12,7 +12,8 @@ import requests
 logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
-REQUEST_DELAY = 0.1  # 100ms between requests
+REQUEST_DELAY = 0.5  # 500ms between requests
+MAX_RETRIES = 5 # Retry attempts
 DEFAULT_CACHE_DIR = Path(__file__).parent.parent / "data" / "training" / "weather"
 
 # Weather variables to fetch — comprehensive set for mountaineering
@@ -40,9 +41,12 @@ def fetch_weather_window(
     longitude: float,
     target_date: date,
     window_days: int = 90,
+    retry_count: int = 0
 ) -> pd.DataFrame:
     """
     Fetch historical weather data from Open-Meteo Archive API.
+
+    Implements exponential backoff retry on HTTP 429 (rate limit) errors.
 
     Args:
         latitude: Peak latitude
@@ -68,6 +72,26 @@ def fetch_weather_window(
             },
             timeout=30,
         )
+
+        # Handle rate limiting specifically
+        if response.status_code == 429:
+            if retry_count >= MAX_RETRIES:
+                 logger.error(f"Max retries exceeded for ({latitude}, {longitude})")
+                 return pd.DataFrame()
+
+            # Exponential backoff: 2^retry_count seconds
+            wait_time = 2 ** retry_count
+            logger.warning(
+                f"Rate limit hit (429). Waiting {wait_time}s before retry "
+                f"(attempt {retry_count + 1}/{MAX_RETRIES})"
+            )
+            time.sleep(wait_time)
+            
+            # Recursive retry
+            return fetch_weather_window(
+                latitude, longitude, target_date, window_days, retry_count + 1
+            )
+        
         response.raise_for_status()
 
         data = response.json()
@@ -81,7 +105,7 @@ def fetch_weather_window(
         df = df.rename(columns={"time": "date"})
         df["date"] = pd.to_datetime(df["date"])
 
-        time.sleep(REQUEST_DELAY)
+        time.sleep(REQUEST_DELAY) # Normal rate limiting
         return df
 
     except requests.RequestException as e:
