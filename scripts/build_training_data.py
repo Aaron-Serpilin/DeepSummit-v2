@@ -14,7 +14,6 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
 
 import pandas as pd
 from tqdm import tqdm
@@ -24,10 +23,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.rate_limiter import RateLimiter
 from utils.weather import (
+    WeatherDataCollector,
     build_multiscale_windows,
     fetch_weather_window,
-    get_cached_weather,
-    save_weather_cache,
+    make_weather_id,
 )
 
 logging.basicConfig(
@@ -145,12 +144,14 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
     """
     Fetch weather for unique (peakid, smtdate) pairs with parallel workers.
 
+    Saves all weather data to a single weather.csv file.
+
     Args:
         df: DataFrame with expedition data
         max_workers: Number of parallel workers for API calls (default 10)
 
     Returns:
-        DataFrame with weather_path column added
+        DataFrame with weather_id column added
     """
     df = df.copy()
 
@@ -162,36 +163,25 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
     logger.info(f"Using {max_workers} parallel workers")
 
     # Create shared rate limiter for all workers
-    # Use conservative rate to avoid hitting API limits
     rate_limiter = RateLimiter(requests_per_minute=500)
-    logger.info(f"Rate limiter: {rate_limiter.requests_per_minute} req/min, ~{rate_limiter.min_interval*1000:.0f}ms between requests")
+    logger.info(
+        f"Rate limiter: {rate_limiter.requests_per_minute} req/min, "
+        f"~{rate_limiter.min_interval*1000:.0f}ms between requests"
+    )
 
-    # Track weather paths
-    weather_paths: dict[tuple[str, str], str] = {}
+    # Create weather collector and load any existing data
+    collector = WeatherDataCollector(OUTPUT_DIR)
+    collector.load_existing()
+    logger.info(f"Starting with {len(collector)} existing weather records")
+
+    # Track stats
     fetched = 0
     cached = 0
     failed = 0
 
-    # Progress tracking file
-    progress_file = OUTPUT_DIR / "weather_fetch_progress.txt"
-    completed_keys = set()
-
-    # Thread-safe lock for writing progress
-    progress_lock = Lock()
-
-    if progress_file.exists():
-        with open(progress_file) as f:
-            completed_keys = set(line.strip() for line in f)
-        logger.info(f"Resuming: {len(completed_keys)} already completed")
-
     def process_weather_row(row_data):
         """Worker function to process a single weather fetch."""
         peakid, smtdate_str, lat, lon = row_data
-        progress_key = f"{peakid}_{smtdate_str}"
-
-        # Skip if already completed
-        if progress_key in completed_keys:
-            return ("cached", peakid, smtdate_str, None)
 
         try:
             smtdate = datetime.strptime(smtdate_str, "%Y-%m-%d").date()
@@ -199,36 +189,19 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
             logger.warning(f"Invalid date format: {smtdate_str}")
             return ("failed", peakid, smtdate_str, "Invalid date")
 
-        # Check cache first
-        cached_data = get_cached_weather(peakid, smtdate)
-        if cached_data is not None:
-            # Mark as completed
-            with progress_lock:
-                with open(progress_file, "a") as f:
-                    f.write(f"{progress_key}\n")
-                completed_keys.add(progress_key)
+        # Check if already in collector
+        if collector.has_weather(peakid, smtdate_str):
             return ("cached", peakid, smtdate_str, None)
 
-        # Fetch from API (with retry logic built in)
+        # Fetch from API
         raw_weather = fetch_weather_window(
             lat, lon, smtdate, window_days=90, rate_limiter=rate_limiter
         )
 
         if not raw_weather.empty:
-            # Build multi-scale windows and concatenate
+            # Build multi-scale windows and add to collector
             windows = build_multiscale_windows(raw_weather, smtdate)
-            combined = pd.concat(
-                [windows["7d"], windows["30d"], windows["90d"]], ignore_index=True
-            )
-
-            save_weather_cache(combined, peakid, smtdate)
-
-            # Mark as completed
-            with progress_lock:
-                with open(progress_file, "a") as f:
-                    f.write(f"{progress_key}\n")
-                completed_keys.add(progress_key)
-
+            collector.add(windows, peakid, smtdate)
             return ("fetched", peakid, smtdate_str, None)
         else:
             return ("failed", peakid, smtdate_str, "Empty response")
@@ -241,10 +214,8 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
 
     # Process in parallel with progress bar
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
         futures = {executor.submit(process_weather_row, item): item for item in work_items}
 
-        # Process results as they complete
         with tqdm(total=len(futures), desc="Fetching weather") as pbar:
             for future in as_completed(futures):
                 try:
@@ -252,10 +223,8 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
 
                     if status == "cached":
                         cached += 1
-                        weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate_str[:10]}.csv"
                     elif status == "fetched":
                         fetched += 1
-                        weather_paths[(peakid, smtdate_str)] = f"weather/{peakid}_{smtdate_str[:10]}.csv"
                     elif status == "failed":
                         failed += 1
                         if error:
@@ -277,9 +246,12 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
         f"elapsed: {stats['elapsed_minutes']:.1f} min"
     )
 
-    # Add weather_path column to main df
-    df["weather_path"] = df.apply(
-        lambda row: weather_paths.get((row["peakid"], row["smtdate"]), ""),
+    # Save all weather data to single CSV
+    collector.save()
+
+    # Add weather_id column to main df
+    df["weather_id"] = df.apply(
+        lambda row: make_weather_id(row["peakid"], row["smtdate"]),
         axis=1,
     )
 
@@ -324,7 +296,7 @@ def select_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "membid",
         "peakid",
         "smtdate",
-        "weather_path",
+        "weather_id",
         # Target
         "summit_reached",
         # Member features
@@ -427,7 +399,7 @@ def main(request_delay: float = 0.5) -> None:
     logger.info(f"Summit success rate: {df['summit_reached'].mean():.2%}")
     logger.info(f"Unique peaks: {df['peakid'].nunique()}")
     logger.info(f"Year range: {df['year'].min()} - {df['year'].max()}")
-    logger.info(f"Weather files: {(df['weather_path'] != '').sum()}")
+    logger.info(f"Weather records: {df['weather_id'].notna().sum()}")
 
 
 if __name__ == "__main__":

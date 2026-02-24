@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import date, timedelta
 from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://archive-api.open-meteo.com/v1/archive"
 REQUEST_DELAY = 0.5  # 500ms between requests
-MAX_RETRIES = 5 # Retry attempts
-DEFAULT_CACHE_DIR = Path(__file__).parent.parent / "data" / "training" / "weather"
+MAX_RETRIES = 5  # Retry attempts
+DEFAULT_OUTPUT_DIR = Path(__file__).parent.parent / "data" / "training"
 
 # Weather variables to fetch — comprehensive set for mountaineering
 DAILY_VARIABLES = [
@@ -189,38 +190,144 @@ def build_multiscale_windows(
     }
 
 
-def get_weather_cache_path(
+def make_weather_id(peakid: str, target_date: date | str) -> str:
+    """
+    Create a unique weather ID from peak and date.
+    """
+    if isinstance(target_date, date):
+        date_str = target_date.isoformat()
+    else:
+        date_str = str(target_date)[:10]
+    return f"{peakid}_{date_str}"
+
+
+def flatten_multiscale_windows(
+    windows: dict[str, pd.DataFrame],
     peakid: str,
     target_date: date,
-    cache_dir: Path = DEFAULT_CACHE_DIR,
-) -> Path:
-    """Get the cache file path for a peak+date combination."""
-    return cache_dir / f"{peakid}_{target_date.isoformat()}.csv"
+) -> dict[str, float | str]:
+    """
+    Flatten multi-scale weather windows into a single row (wide format).
+
+    Creates columns like: 7d_b0_temperature_2m_mean, 30d_b5_wind_speed_10m_max, etc.
+
+    Args:
+        windows: Dict with '7d', '30d', '90d' DataFrames from build_multiscale_windows
+        peakid: Peak identifier
+        target_date: Target date for this weather record
+
+    Returns:
+        Dict representing a single row with all weather variables flattened.
+    """
+    row: dict[str, float | str] = {
+        "weather_id": make_weather_id(peakid, target_date),
+        "peakid": peakid,
+        "smtdate": target_date.isoformat() if isinstance(target_date, date) else str(target_date)[:10],
+    }
+
+    for scale, df in windows.items():
+        if df.empty:
+            continue
+
+        # Get numeric columns (weather variables)
+        numeric_cols = [c for c in df.columns if c not in ("date", "scale", "bucket")]
+
+        for _, bucket_row in df.iterrows():
+            bucket_idx = int(bucket_row.get("bucket", 0))
+            for col in numeric_cols:
+                col_name = f"{scale}_b{bucket_idx}_{col}"
+                value = bucket_row[col]
+                row[col_name] = float(value) if pd.notna(value) else np.nan
+
+    return row
 
 
-def get_cached_weather(
-    peakid: str,
-    target_date: date,
-    cache_dir: Path = DEFAULT_CACHE_DIR,
-) -> pd.DataFrame | None:
-    """Load cached weather data if available."""
-    cache_path = get_weather_cache_path(peakid, target_date, cache_dir)
-    if cache_path.exists():
-        try:
-            return pd.read_csv(cache_path)
-        except Exception as e:
-            logger.warning(f"Failed to load cache {cache_path}: {e}")
-    return None
+class WeatherDataCollector:
+    """
+    Thread-safe collector for accumulating weather data into a single CSV.
 
+    Usage:
+        collector = WeatherDataCollector()
 
-def save_weather_cache(
-    weather_df: pd.DataFrame,
-    peakid: str,
-    target_date: date,
-    cache_dir: Path = DEFAULT_CACHE_DIR,
-) -> None:
-    """Save weather data to cache."""
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = get_weather_cache_path(peakid, target_date, cache_dir)
-    weather_df.to_csv(cache_path, index=False)
-    logger.debug(f"Cached weather to {cache_path}")
+        # In parallel workers:
+        collector.add(windows, peakid, target_date)
+
+        # After all fetches complete:
+        collector.save()
+    """
+
+    def __init__(self, output_dir: Path = DEFAULT_OUTPUT_DIR) -> None:
+        self.output_dir = output_dir
+        self.rows: list[dict[str, float | str]] = []
+        self.lock = Lock()
+        self.weather_ids: set[str] = set()
+
+    def load_existing(self) -> None:
+        """
+        Load existing weather.csv if present (for resume support).
+        """
+        weather_path = self.output_dir / "weather.csv"
+        if weather_path.exists():
+            try:
+                df = pd.read_csv(weather_path)
+                self.rows = df.to_dict("records")
+                self.weather_ids = set(df["weather_id"].tolist())
+                logger.info(f"Loaded {len(self.rows)} existing weather records")
+            except Exception as e:
+                logger.warning(f"Failed to load existing weather.csv: {e}")
+
+    def has_weather(self, peakid: str, target_date: date | str) -> bool:
+        """
+        Check if weather data already exists for this peak+date.
+        """
+        weather_id = make_weather_id(peakid, target_date)
+        return weather_id in self.weather_ids
+
+    def add(
+        self,
+        windows: dict[str, pd.DataFrame],
+        peakid: str,
+        target_date: date,
+    ) -> str:
+        """
+        Add weather data to the collector.
+
+        Returns:
+            The weather_id for this record.
+        """
+        row = flatten_multiscale_windows(windows, peakid, target_date)
+        weather_id = row["weather_id"]
+
+        with self.lock:
+            if weather_id not in self.weather_ids:
+                self.rows.append(row)
+                self.weather_ids.add(weather_id)
+
+        return weather_id
+
+    def save(self) -> Path:
+        """
+        Save all collected weather data to weather.csv.
+        """
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = self.output_dir / "weather.csv"
+
+        with self.lock:
+            if not self.rows:
+                logger.warning("No weather data to save")
+                return output_path
+
+            df = pd.DataFrame(self.rows)
+
+            # Sort columns: identifiers first, then weather variables
+            id_cols = ["weather_id", "peakid", "smtdate"]
+            weather_cols = sorted([c for c in df.columns if c not in id_cols])
+            df = df[id_cols + weather_cols]
+
+            df.to_csv(output_path, index=False)
+            logger.info(f"Saved {len(df)} weather records to {output_path}")
+
+        return output_path
+
+    def __len__(self) -> int:
+        return len(self.rows)
