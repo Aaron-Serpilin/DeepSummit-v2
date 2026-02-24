@@ -12,11 +12,6 @@ cred.json
 .env.local
 .venv
 
-# Data (keep Himalayan CSV training data, ignore everything else)
-data/*
-!data/himalayas/
-!data/himalayas/**
-
 # Cache / runtime
 *.db
 dump.rdb
