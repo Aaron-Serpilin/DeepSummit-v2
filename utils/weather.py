@@ -4,10 +4,14 @@ import logging
 import time
 from datetime import date, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import requests
+
+if TYPE_CHECKING:
+    from utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +45,8 @@ def fetch_weather_window(
     longitude: float,
     target_date: date,
     window_days: int = 90,
-    retry_count: int = 0
+    retry_count: int = 0,
+    rate_limiter: "RateLimiter | None" = None,
 ) -> pd.DataFrame:
     """
     Fetch historical weather data from Open-Meteo Archive API.
@@ -53,11 +58,17 @@ def fetch_weather_window(
         longitude: Peak longitude
         target_date: End date for weather window (typically summit date)
         window_days: Number of days before target_date to fetch
+        retry_count: Current retry attempt (internal use for recursion)
+        rate_limiter: Optional RateLimiter to coordinate requests across workers
 
     Returns:
         DataFrame with daily weather data, or empty DataFrame on error.
     """
     start_date = target_date - timedelta(days=window_days - 1)
+
+    # Acquire rate limit token before making request
+    if rate_limiter:
+        rate_limiter.acquire()
 
     try:
         response = requests.get(
@@ -86,12 +97,12 @@ def fetch_weather_window(
                 f"(attempt {retry_count + 1}/{MAX_RETRIES})"
             )
             time.sleep(wait_time)
-            
+
             # Recursive retry
             return fetch_weather_window(
-                latitude, longitude, target_date, window_days, retry_count + 1
+                latitude, longitude, target_date, window_days, retry_count + 1, rate_limiter
             )
-        
+
         response.raise_for_status()
 
         data = response.json()
@@ -105,7 +116,9 @@ def fetch_weather_window(
         df = df.rename(columns={"time": "date"})
         df["date"] = pd.to_datetime(df["date"])
 
-        time.sleep(REQUEST_DELAY) # Normal rate limiting
+        # Only sleep if not using rate limiter (backward compatibility)
+        if not rate_limiter:
+            time.sleep(REQUEST_DELAY)
         return df
 
     except requests.RequestException as e:

@@ -22,6 +22,7 @@ from tqdm import tqdm
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from utils.rate_limiter import RateLimiter
 from utils.weather import (
     build_multiscale_windows,
     fetch_weather_window,
@@ -160,6 +161,11 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
     logger.info(f"Need weather for {len(unique_weather)} unique peak+date combinations")
     logger.info(f"Using {max_workers} parallel workers")
 
+    # Create shared rate limiter for all workers
+    # Use conservative rate to avoid hitting API limits
+    rate_limiter = RateLimiter(requests_per_minute=500)
+    logger.info(f"Rate limiter: {rate_limiter.requests_per_minute} req/min, ~{rate_limiter.min_interval*1000:.0f}ms between requests")
+
     # Track weather paths
     weather_paths: dict[tuple[str, str], str] = {}
     fetched = 0
@@ -204,7 +210,9 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
             return ("cached", peakid, smtdate_str, None)
 
         # Fetch from API (with retry logic built in)
-        raw_weather = fetch_weather_window(lat, lon, smtdate, window_days=90)
+        raw_weather = fetch_weather_window(
+            lat, lon, smtdate, window_days=90, rate_limiter=rate_limiter
+        )
 
         if not raw_weather.empty:
             # Build multi-scale windows and concatenate
@@ -260,6 +268,14 @@ def fetch_weather_for_expeditions(df: pd.DataFrame, max_workers: int = 10) -> pd
                 pbar.update(1)
 
     logger.info(f"Weather fetch complete: {cached} cached, {fetched} fetched, {failed} failed")
+
+    # Log rate limiter statistics
+    stats = rate_limiter.get_stats()
+    logger.info(
+        f"Rate limiter stats: {stats['total_requests']} requests, "
+        f"actual rate: {stats['actual_rate_per_min']}/min, "
+        f"elapsed: {stats['elapsed_minutes']:.1f} min"
+    )
 
     # Add weather_path column to main df
     df["weather_path"] = df.apply(
