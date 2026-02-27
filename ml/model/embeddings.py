@@ -106,4 +106,5 @@ class ModalityEmbedding(nn.Module):
         Returns:
             Modality embeddings of shape (batch, seq_len, hidden_size)
         """
-        return self.embedding(modality_ids)
+        embeddings: torch.Tensor = self.embedding(modality_ids)
+        return embeddings

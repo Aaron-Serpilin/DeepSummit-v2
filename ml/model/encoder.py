@@ -159,12 +159,12 @@ class TransformerEncoder(nn.Module):
                 - Encoded tokens of shape (batch, seq_len, hidden_size)
                 - List of attention weights per layer (if return_attention=True)
         """
-        attention_weights = [] if return_attention else None
+        attention_weights: list[torch.Tensor] | None = [] if return_attention else None
 
         # Apply each transformer block
         for block in self.blocks:
             x, attn = block(x, attention_mask)
-            if return_attention and attn is not None:
+            if return_attention and attn is not None and attention_weights is not None:
                 attention_weights.append(attn)
 
         # Final normalization

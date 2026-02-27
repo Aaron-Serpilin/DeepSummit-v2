@@ -52,7 +52,7 @@ class MultiHeadAttention(nn.Module):
         self,
         x: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """Apply multi-head self-attention.
 
         Args:
@@ -63,7 +63,7 @@ class MultiHeadAttention(nn.Module):
         Returns:
             Tuple of:
                 - Output tensor of shape (batch, seq_len, hidden_size)
-                - Attention weights of shape (batch, num_heads, seq_len, seq_len)
+                - Attention weights of shape (batch, num_heads, seq_len, seq_len) or None
         """
         batch_size, seq_len, _ = x.shape
 

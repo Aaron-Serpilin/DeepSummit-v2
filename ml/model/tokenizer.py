@@ -84,7 +84,7 @@ class TabularTokenizer(nn.Module):
         Returns:
             Token embeddings of shape (batch, 20, hidden_size)
         """
-        tokens = []
+        tokens: list[torch.Tensor] = []
 
         # Tokenize numeric features
         for i, tokenizer in enumerate(self.numeric_tokenizers):
@@ -106,9 +106,9 @@ class TabularTokenizer(nn.Module):
             tokens.append(token)
 
         # Stack all tokens: (batch, 20, hidden_size)
-        tokens = torch.stack(tokens, dim=1)
+        tokens_stacked: torch.Tensor = torch.stack(tokens, dim=1)
 
-        return tokens
+        return tokens_stacked
 
 
 class WeatherTokenizer(nn.Module):
@@ -193,6 +193,6 @@ class WeatherTokenizer(nn.Module):
         # (batch, 26, hidden_size)
 
         # Add temporal encoding to weather tokens
-        tokens = weather_tokens + temporal_tokens
+        tokens: torch.Tensor = weather_tokens + temporal_tokens
 
         return tokens

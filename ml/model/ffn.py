@@ -65,16 +65,16 @@ class SwiGLU(nn.Module):
             Output tensor of shape (..., hidden_size)
         """
         # Gate path: apply Swish (SiLU) activation
-        gate = F.silu(self.gate_proj(x))
+        gate: torch.Tensor = F.silu(self.gate_proj(x))
 
         # Value path: no activation
-        value = self.value_proj(x)
+        value: torch.Tensor = self.value_proj(x)
 
         # Element-wise gating
-        hidden = gate * value
+        hidden: torch.Tensor = gate * value
 
         # Output projection with dropout
-        output = self.output_proj(hidden)
+        output: torch.Tensor = self.output_proj(hidden)
         output = self.dropout(output)
 
         return output
