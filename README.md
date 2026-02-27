@@ -116,6 +116,10 @@ Data flows from the Himalayan Database and Open-Meteo API through Pandera valida
 
 ## Setup
 
+**Token Savings**
+Use Rust Token Killer to filter and compress CLI outputs before sending them to Claude.
+Repository: <https://github.com/rtk-ai/rtk>
+
 > **Coming soon.** Setup and local development instructions will be added as the project stabilises. Check back or watch the repository for updates.
 
 ---
