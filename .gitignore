@@ -13,6 +13,13 @@ cred.json
 .venv
 frontend/app/src/config.ts
 
+# Frontend build artifacts
+frontend/app/node_modules/
+frontend/app/dist/
+frontend/app/.vite/
+frontend/app/.firebase/
+frontend/app/build/
+
 # Cache / runtime
 *.db
 dump.rdb
