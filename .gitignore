@@ -12,6 +12,14 @@ cred.json
 .env.local
 .venv
 
+# Frontend build artifacts (prevents untracked files when switching branches)
+frontend/app/node_modules/
+frontend/app/dist/
+frontend/app/.vite/
+frontend/app/.firebase/
+frontend/app/build/
+frontend/app/src/config.ts
+
 # Cache / runtime
 *.db
 dump.rdb
