@@ -1,7 +1,6 @@
 """Tests for normalization layers."""
 
 import torch
-import pytest
 
 from ml.model.normalization import RMSNorm
 

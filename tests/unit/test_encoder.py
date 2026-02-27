@@ -1,7 +1,6 @@
 """Tests for transformer encoder components."""
 
 import torch
-import pytest
 
 from ml.model.encoder import TransformerBlock, TransformerEncoder
 

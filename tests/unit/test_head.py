@@ -1,7 +1,6 @@
 """Tests for classification head."""
 
 import torch
-import pytest
 
 from ml.model.head import ClassificationHead
 

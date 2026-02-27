@@ -1,7 +1,7 @@
 """Tests for multi-head attention."""
 
-import torch
 import pytest
+import torch
 
 from ml.model.attention import MultiHeadAttention
 

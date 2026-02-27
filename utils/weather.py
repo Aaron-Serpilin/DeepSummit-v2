@@ -194,10 +194,7 @@ def make_weather_id(peakid: str, target_date: date | str) -> str:
     """
     Create a unique weather ID from peak and date.
     """
-    if isinstance(target_date, date):
-        date_str = target_date.isoformat()
-    else:
-        date_str = str(target_date)[:10]
+    date_str = target_date.isoformat() if isinstance(target_date, date) else str(target_date)[:10]
     return f"{peakid}_{date_str}"
 
 

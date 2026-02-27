@@ -1,7 +1,6 @@
 """Tests for feed-forward network layers."""
 
 import torch
-import pytest
 
 from ml.model.ffn import SwiGLU
 

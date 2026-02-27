@@ -1,7 +1,6 @@
 """Tests for regularization layers."""
 
 import torch
-import pytest
 
 from ml.model.regularization import DropPath, create_drop_path_schedule
 
@@ -104,7 +103,7 @@ class TestCreateDropPathSchedule:
 
         expected = [0.0, 0.02, 0.04, 0.06, 0.08, 0.1]
         assert len(schedule) == 6
-        for actual, exp in zip(schedule, expected):
+        for actual, exp in zip(schedule, expected, strict=True):
             assert abs(actual - exp) < 1e-6
 
     def test_first_layer_always_zero(self) -> None:

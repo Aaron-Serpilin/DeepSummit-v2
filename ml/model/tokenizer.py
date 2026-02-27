@@ -84,7 +84,6 @@ class TabularTokenizer(nn.Module):
         Returns:
             Token embeddings of shape (batch, 20, hidden_size)
         """
-        batch_size = numeric.shape[0]
         tokens = []
 
         # Tokenize numeric features
