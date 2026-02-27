@@ -11,6 +11,7 @@ cred.json
 .env
 .env.local
 .venv
+frontend/app/src/config.ts
 
 # Cache / runtime
 *.db

@@ -4,13 +4,13 @@ import Map, { Marker, type MapRef } from 'react-map-gl/mapbox'
 import { PEAKS, searchPeaks } from '../../data/peaks'
 import type { Peak } from '../../types/peak'
 import { Search, Mountain } from 'lucide-react'
+import { config } from '../../config'
 
-// You'll need to add your Mapbox token to .env.local as VITE_MAPBOX_TOKEN
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || ''
+const MAPBOX_TOKEN = config.mapbox.token
 
 // Warn if token is missing
 if (!MAPBOX_TOKEN) {
-  console.warn('VITE_MAPBOX_TOKEN is not set. Add it to .env.local')
+  console.warn('Mapbox token is not configured. Update src/config.ts with your token.')
 }
 
 interface MapViewProps {
