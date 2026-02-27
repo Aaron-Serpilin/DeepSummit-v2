@@ -6,11 +6,10 @@ from unittest.mock import Mock
 import pandas as pd
 
 from utils.weather import (
+    WeatherDataCollector,
     build_multiscale_windows,
     fetch_weather_window,
-    get_cached_weather,
-    get_weather_cache_path,
-    save_weather_cache,
+    make_weather_id,
 )
 
 
@@ -121,30 +120,74 @@ class TestBuildMultiscaleWindows:
 
 
 class TestWeatherCaching:
-    def test_cache_path_format(self):
-        """Cache path follows {peakid}_{date}.csv format."""
-        path = get_weather_cache_path("EVER", date(2023, 5, 15))
-        assert path.name == "EVER_2023-05-15.csv"
+    def test_weather_id_format(self):
+        """Weather ID follows {peakid}_{date} format."""
+        weather_id = make_weather_id("EVER", date(2023, 5, 15))
+        assert weather_id == "EVER_2023-05-15"
 
-    def test_save_and_load_cache(self, tmp_path):
-        """Can save and load weather cache."""
-        cache_dir = tmp_path / "weather"
-        df = pd.DataFrame(
-            {
-                "date": ["2023-05-15"],
-                "temperature_2m_mean": [10.5],
-            }
-        )
+    def test_weather_id_handles_string_date(self):
+        """Weather ID works with string dates too."""
+        weather_id = make_weather_id("EVER", "2023-05-15")
+        assert weather_id == "EVER_2023-05-15"
 
-        save_weather_cache(df, "EVER", date(2023, 5, 15), cache_dir=cache_dir)
-        loaded = get_cached_weather("EVER", date(2023, 5, 15), cache_dir=cache_dir)
+    def test_collector_add_and_has_weather(self, tmp_path):
+        """Can add weather data and check if it exists."""
+        collector = WeatherDataCollector(output_dir=tmp_path)
 
-        assert loaded is not None
-        assert len(loaded) == 1
-        assert loaded["temperature_2m_mean"].iloc[0] == 10.5
+        # Create multi-scale windows
+        dates = pd.date_range(end="2023-05-15", periods=90, freq="D")
+        raw_df = pd.DataFrame({
+            "date": dates,
+            "temperature_2m_mean": range(90),
+        })
+        windows = build_multiscale_windows(raw_df, target_date=date(2023, 5, 15))
 
-    def test_returns_none_when_no_cache(self, tmp_path):
-        """Returns None when cache doesn't exist."""
-        cache_dir = tmp_path / "weather"
-        result = get_cached_weather("NOTEXIST", date(2023, 5, 15), cache_dir=cache_dir)
-        assert result is None
+        # Initially should not have weather
+        assert not collector.has_weather("EVER", date(2023, 5, 15))
+
+        # Add weather
+        weather_id = collector.add(windows, "EVER", date(2023, 5, 15))
+
+        # Now should have weather
+        assert collector.has_weather("EVER", date(2023, 5, 15))
+        assert weather_id == "EVER_2023-05-15"
+
+    def test_collector_save_and_load(self, tmp_path):
+        """Can save weather data and load it back."""
+        collector = WeatherDataCollector(output_dir=tmp_path)
+
+        # Create and add weather data
+        dates = pd.date_range(end="2023-05-15", periods=90, freq="D")
+        raw_df = pd.DataFrame({
+            "date": dates,
+            "temperature_2m_mean": range(90),
+        })
+        windows = build_multiscale_windows(raw_df, target_date=date(2023, 5, 15))
+        collector.add(windows, "EVER", date(2023, 5, 15))
+
+        # Save to CSV
+        output_path = collector.save()
+        assert output_path.exists()
+
+        # Load into new collector
+        new_collector = WeatherDataCollector(output_dir=tmp_path)
+        new_collector.load_existing()
+
+        assert new_collector.has_weather("EVER", date(2023, 5, 15))
+        assert len(new_collector) == 1
+
+    def test_collector_deduplicates(self, tmp_path):
+        """Adding same peak+date twice should not create duplicates."""
+        collector = WeatherDataCollector(output_dir=tmp_path)
+
+        dates = pd.date_range(end="2023-05-15", periods=90, freq="D")
+        raw_df = pd.DataFrame({
+            "date": dates,
+            "temperature_2m_mean": range(90),
+        })
+        windows = build_multiscale_windows(raw_df, target_date=date(2023, 5, 15))
+
+        collector.add(windows, "EVER", date(2023, 5, 15))
+        collector.add(windows, "EVER", date(2023, 5, 15))
+
+        assert len(collector) == 1

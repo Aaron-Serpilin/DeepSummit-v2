@@ -127,9 +127,12 @@ Repository: <https://github.com/rtk-ai/rtk>
 ## Usage
 
 **CI Checks**
-To run CI Checks locally to obtain immediate feedback before pushing, run the following commands:
+To run CI Checks locally to obtain immediate feedback before pushing, run the following command from the home directory:
 ```bash
-ruff check . && mypy ml/ --ignore-missing-imports && pytest -v --tb=short -x
+# Locally (ARM64 architecture for Mac)
+source .venv/bin/activate && ruff check . && pytest -v --tb=short
+# GitHub (x86_64 architecture for Runner VM)
+source .venv/bin/activate && ruff check . && mypy ml/ --ignore-missing-imports && pytest -v --tb=short
 ```
 
 > **Coming soon.** Usage documentation and a live demo link will be added when the first deployment is ready.
