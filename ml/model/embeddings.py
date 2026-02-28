@@ -81,8 +81,13 @@ class ModalityEmbedding(nn.Module):
     Each token gets a modality-specific embedding added to it, allowing the
     transformer to understand which "data source" each token comes from.
 
+    Unlike [SEP] tokens which waste sequence positions, modality embeddings
+    provide the same boundary information while being more efficient and
+    learnable. The transformer learns different attention patterns based
+    on modality type.
+
     Modality types:
-        0: Special tokens ([CLS], [SEP])
+        0: [CLS] token (classification aggregator)
         1: Tabular features (expedition metadata)
         2: 7-day weather (tactical summit conditions)
         3: 30-day weather (acclimatization period)
