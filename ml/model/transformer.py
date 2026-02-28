@@ -20,6 +20,8 @@ Architecture Overview:
         5. Extract [CLS] representation for classification
 """
 
+from typing import cast
+
 import torch
 import torch.nn as nn
 
@@ -68,6 +70,9 @@ class DeepSummitTransformer(nn.Module):
     MODALITY_WEATHER_30D = 3
     MODALITY_WEATHER_90D = 4
     NUM_MODALITIES = 5
+
+    # Type annotation for registered buffer
+    modality_ids_template: torch.Tensor
 
     def __init__(
         self,
@@ -251,7 +256,7 @@ class DeepSummitTransformer(nn.Module):
             day_of_year=day_of_year,
             return_attention=False,
         )
-        return output["probability"]
+        return cast(torch.Tensor, output["probability"])
 
     def get_attention_weights(
         self,
@@ -293,7 +298,7 @@ class DeepSummitTransformer(nn.Module):
         attention_weights = output["attention_weights"]
         if attention_weights is None:
             return []
-        return attention_weights
+        return cast(list[torch.Tensor], attention_weights)
 
     def count_parameters(self) -> dict[str, int]:
         """Count parameters by component for analysis.
