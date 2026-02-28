@@ -37,7 +37,7 @@ Throughout this document, we use the following notation:
 | Symbol | Meaning | Example |
 |--------|---------|---------|
 | `B` | Batch size | 32 samples processed together |
-| `S` | Sequence length | 49 tokens |
+| `S` | Sequence length | 47 tokens |
 | `H` | Hidden size | 256 dimensions |
 | `d_k` | Head dimension | H / num_heads = 32 |
 | `n_h` | Number of attention heads | 8 |
@@ -136,7 +136,7 @@ class RMSNorm(nn.Module):
 ### 2.5 Shape Transformation
 
 ```
-Input:  x        (B, S, H)      e.g., (32, 49, 256)
+Input:  x        (B, S, H)      e.g., (32, 47, 256)
         ↓
         x²       (B, S, H)      element-wise square
         ↓
@@ -277,7 +277,7 @@ Input:  x               (B, S, H)           e.g., (32, 49, 256)
         ↓
         dropout         (B, S, H)
         ↓
-Output:                 (B, S, H)           same shape as input
+Output:                 (B, S, H)           same shape as input, (32, 47, 256)
 ```
 
 ### 3.7 Parameter Count Comparison
@@ -381,7 +381,7 @@ class DropPath(nn.Module):
 ### 4.6 Shape Transformation
 
 ```
-Input:  x        (B, S, H)      e.g., (32, 49, 256)
+Input:  x        (B, S, H)      e.g., (32, 47, 256)
         ↓
         mask     (B, 1, 1)      random 0 or 1 per sample
         ↓
@@ -425,7 +425,7 @@ Query: "What weather patterns relate to success?"
         ▼
 ┌───────────────────────────────────────────────────┐
 │ Sequence:                                         │
-│ [CLS] [age] [o2] ... [SEP] [7d_w1] [7d_w2] ...   │
+│ [CLS] [age] [o2] ... [SEP] [7d_w1] [7d_w2] ...    │
 │                             ▲       ▲             │
 │                             │       │             │
 │                      High attention weights       │
@@ -447,26 +447,26 @@ $$\text{head}_i = \text{Attention}(XW_i^Q, XW_i^K, XW_i^V)$$
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Input X (B, S, H)                    │
-│                            │                             │
+│                     Input X (B, S, H)                   │
+│                            │                            │
 │         ┌──────────────────┼──────────────────┐         │
 │         │                  │                  │         │
 │         ▼                  ▼                  ▼         │
-│    ┌─────────┐       ┌─────────┐       ┌─────────┐     │
-│    │ Head 1  │       │ Head 2  │  ...  │ Head 8  │     │
-│    │ d_k=32  │       │ d_k=32  │       │ d_k=32  │     │
-│    └────┬────┘       └────┬────┘       └────┬────┘     │
+│    ┌─────────┐       ┌─────────┐       ┌─────────┐      │
+│    │ Head 1  │       │ Head 2  │  ...  │ Head 8  │      │
+│    │ d_k=32  │       │ d_k=32  │       │ d_k=32  │      │
+│    └────┬────┘       └────┬────┘       └────┬────┘      │
 │         │                  │                  │         │
 │         └──────────────────┼──────────────────┘         │
-│                            │                             │
-│                      Concatenate                         │
-│                    (B, S, 8×32=256)                      │
-│                            │                             │
-│                            ▼                             │
-│                      Output Proj W^O                     │
-│                            │                             │
-│                            ▼                             │
-│                    Output (B, S, H)                      │
+│                            │                            │
+│                      Concatenate                        │
+│                    (B, S, 8×32=256)                     │
+│                            │                            │
+│                            ▼                            │
+│                      Output Proj W^O                    │
+│                            │                            │
+│                            ▼                            │
+│                    Output (B, S, H)                     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -560,21 +560,21 @@ class MultiHeadAttention(nn.Module):
 ### 5.7 Shape Transformation Summary
 
 ```
-Input:  x         (B, S, H)          (32, 49, 256)
+Input:  x         (B, S, H)          (32, 47, 256)
         ↓
         Q,K,V     (B, S, H)          (32, 49, 256)
         ↓ reshape
-        Q,K,V     (B, n_h, S, d_k)   (32, 8, 49, 32)
+        Q,K,V     (B, n_h, S, d_k)   (32, 8, 47, 32)
         ↓
-        scores    (B, n_h, S, S)     (32, 8, 49, 49)  ← Q @ K^T
+        scores    (B, n_h, S, S)     (32, 8, 47, 47)  ← Q @ K^T
         ↓ softmax
-        weights   (B, n_h, S, S)     (32, 8, 49, 49)  ← attention weights
+        weights   (B, n_h, S, S)     (32, 8, 47, 47)  ← attention weights
         ↓
-        context   (B, n_h, S, d_k)   (32, 8, 49, 32)  ← weights @ V
+        context   (B, n_h, S, d_k)   (32, 8, 47, 32)  ← weights @ V
         ↓ reshape
-        concat    (B, S, H)          (32, 49, 256)
+        concat    (B, S, H)          (32, 47, 256)
         ↓
-Output:           (B, S, H)          (32, 49, 256)
+Output:           (B, S, H)          (32, 47, 256)
 ```
 
 ### 5.8 Why √d_k Scaling?
@@ -812,8 +812,8 @@ WEATHER TOKENIZATION:
                                 ─────────────────
                                 26 tokens (B, 26, H)
 
-TOTAL SEQUENCE (with special tokens):
-    [CLS] + 20 tabular + [SEP] + 26 weather + [SEP] = 49 tokens
+TOTAL SEQUENCE (with [CLS] token):
+    [CLS] + 20 tabular + 26 weather = 47 tokens
 ```
 
 ---
@@ -826,51 +826,51 @@ A transformer block combines attention and FFN with normalization and residuals:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                      TRANSFORMER BLOCK                          │
-│                                                                  │
-│    Input x                                                       │
-│        │                                                         │
-│        ├──────────────── residual ────────────────┐              │
-│        │                                          │              │
-│        ▼                                          │              │
-│   ┌─────────┐                                     │              │
-│   │ RMSNorm │  Pre-normalization                  │              │
-│   └────┬────┘                                     │              │
-│        │                                          │              │
-│        ▼                                          │              │
-│   ┌─────────────────┐                             │              │
-│   │ Multi-Head Attn │                             │              │
-│   └────────┬────────┘                             │              │
-│            │                                      │              │
-│            ▼                                      │              │
-│       ┌─────────┐                                 │              │
-│       │DropPath │  Stochastic regularization     │              │
-│       └────┬────┘                                 │              │
-│            │                                      │              │
-│            └───────────────► + ◄──────────────────┘              │
-│                              │                                   │
-│        ├──────────────── residual ────────────────┐              │
-│        │                                          │              │
-│        ▼                                          │              │
-│   ┌─────────┐                                     │              │
-│   │ RMSNorm │  Pre-normalization                  │              │
-│   └────┬────┘                                     │              │
-│        │                                          │              │
-│        ▼                                          │              │
-│   ┌─────────────────┐                             │              │
-│   │   SwiGLU FFN    │                             │              │
-│   └────────┬────────┘                             │              │
-│            │                                      │              │
-│            ▼                                      │              │
-│       ┌─────────┐                                 │              │
-│       │DropPath │                                 │              │
-│       └────┬────┘                                 │              │
-│            │                                      │              │
-│            └───────────────► + ◄──────────────────┘              │
-│                              │                                   │
-│                              ▼                                   │
-│                           Output                                 │
-│                                                                  │
+│                      TRANSFORMER BLOCK                         │
+│                                                                │
+│    Input x                                                     │
+│        │                                                       │
+│        ├──────────────── residual ────────────────┐            │
+│        │                                          │            │
+│        ▼                                          │            │
+│   ┌─────────┐                                     │            │
+│   │ RMSNorm │  Pre-normalization                  │            │
+│   └────┬────┘                                     │            │
+│        │                                          │            │
+│        ▼                                          │            │
+│   ┌─────────────────┐                             │            │
+│   │ Multi-Head Attn │                             │            │
+│   └────────┬────────┘                             │            │
+│            │                                      │            │
+│            ▼                                      │            │
+│       ┌─────────┐                                 │            │
+│       │DropPath │  Stochastic regularization     │             │
+│       └────┬────┘                                 │            │
+│            │                                      │            │
+│            └───────────────► + ◄──────────────────┘            │
+│                              │                                 │
+│        ├──────────────── residual ────────────────┐            │
+│        │                                          │            │
+│        ▼                                          │            │
+│   ┌─────────┐                                     │            │
+│   │ RMSNorm │  Pre-normalization                  │            │
+│   └────┬────┘                                     │            │
+│        │                                          │            │
+│        ▼                                          │            │
+│   ┌─────────────────┐                             │            │
+│   │   SwiGLU FFN    │                             │            │
+│   └────────┬────────┘                             │            │
+│            │                                      │            │
+│            ▼                                      │            │
+│       ┌─────────┐                                 │            │
+│       │DropPath │                                 │            │
+│       └────┬────┘                                 │            │
+│            │                                      │            │
+│            └───────────────► + ◄──────────────────┘            │
+│                              │                                 │
+│                              ▼                                 │
+│                           Output                               │
+│                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -928,7 +928,7 @@ class TransformerBlock(nn.Module):
 ### 8.5 Shape Through Block
 
 ```
-Input:      x          (B, S, H)      (32, 49, 256)
+Input:      x          (B, S, H)      (32, 47, 256)
             │
             ├─────────────────────────────┐ residual
             ▼                             │
@@ -950,7 +950,7 @@ Input:      x          (B, S, H)      (32, 49, 256)
             ▼                             │
             + ◄───────────────────────────┘
             │
-Output:                (B, S, H)      (32, 49, 256)
+Output:                (B, S, H)      (32, 47, 256)
 ```
 
 ---
@@ -967,48 +967,48 @@ $$\text{Encoder}(x) = \text{RMSNorm}(\text{Block}_N(\text{Block}_{N-1}(...\text{
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    TRANSFORMER ENCODER                           │
-│                                                                  │
-│    Input tokens (B, S, H)                                        │
-│           │                                                      │
-│           ▼                                                      │
-│    ┌─────────────────────┐                                       │
-│    │ Transformer Block 0 │  drop_path = 0.00                     │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    ┌─────────────────────┐                                       │
-│    │ Transformer Block 1 │  drop_path = 0.02                     │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    ┌─────────────────────┐                                       │
-│    │ Transformer Block 2 │  drop_path = 0.04                     │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    ┌─────────────────────┐                                       │
-│    │ Transformer Block 3 │  drop_path = 0.06                     │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    ┌─────────────────────┐                                       │
-│    │ Transformer Block 4 │  drop_path = 0.08                     │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    ┌─────────────────────┐                                       │
-│    │ Transformer Block 5 │  drop_path = 0.10                     │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    ┌─────────────────────┐                                       │
-│    │      RMSNorm        │  Final normalization                  │
-│    └──────────┬──────────┘                                       │
-│               │                                                  │
-│               ▼                                                  │
-│    Output tokens (B, S, H)                                       │
-│                                                                  │
+│                    TRANSFORMER ENCODER                          │
+│                                                                 │
+│    Input tokens (B, S, H)                                       │
+│           │                                                     │
+│           ▼                                                     │
+│    ┌─────────────────────┐                                      │
+│    │ Transformer Block 0 │  drop_path = 0.00                    │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    ┌─────────────────────┐                                      │
+│    │ Transformer Block 1 │  drop_path = 0.02                    │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    ┌─────────────────────┐                                      │
+│    │ Transformer Block 2 │  drop_path = 0.04                    │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    ┌─────────────────────┐                                      │
+│    │ Transformer Block 3 │  drop_path = 0.06                    │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    ┌─────────────────────┐                                      │
+│    │ Transformer Block 4 │  drop_path = 0.08                    │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    ┌─────────────────────┐                                      │
+│    │ Transformer Block 5 │  drop_path = 0.10                    │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    ┌─────────────────────┐                                      │
+│    │      RMSNorm        │  Final normalization                 │
+│    └──────────┬──────────┘                                      │
+│               │                                                 │
+│               ▼                                                 │
+│    Output tokens (B, S, H)                                      │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1048,25 +1048,25 @@ class TransformerEncoder(nn.Module):
 ### 9.4 Shape Through Encoder
 
 ```
-Input:       (B, S, H)       (32, 49, 256)
+Input:       (B, S, H)       (32, 47, 256)
     │
     ▼
-Block 0:     (B, S, H)       (32, 49, 256)
+Block 0:     (B, S, H)       (32, 47, 256)
     │
     ▼
-Block 1:     (B, S, H)       (32, 49, 256)
+Block 1:     (B, S, H)       (32, 47, 256)
     │
     ▼
   ...
     │
     ▼
-Block 5:     (B, S, H)       (32, 49, 256)
+Block 5:     (B, S, H)       (32, 47, 256)
     │
     ▼
-RMSNorm:     (B, S, H)       (32, 49, 256)
+RMSNorm:     (B, S, H)       (32, 47, 256)
     │
     ▼
-Output:      (B, S, H)       (32, 49, 256)
+Output:      (B, S, H)       (32, 47, 256)
 ```
 
 **Key insight:** The shape never changes through the encoder. All processing happens in the hidden dimension.
@@ -1077,7 +1077,7 @@ Output:      (B, S, H)       (32, 49, 256)
 
 ### 10.1 From Sequence to Probability
 
-The transformer outputs 49 token embeddings. We need a single probability. The **[CLS] token** (position 0) aggregates information from all tokens through attention.
+The transformer outputs 47 token embeddings. We need a single probability. The **[CLS] token** (position 0) aggregates information from all tokens through attention.
 
 $$P(\text{summit}) = \sigma(\text{MLP}(\text{encoder\_output}[0]))$$
 
@@ -1085,48 +1085,48 @@ $$P(\text{summit}) = \sigma(\text{MLP}(\text{encoder\_output}[0]))$$
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    CLASSIFICATION HEAD                           │
-│                                                                  │
-│    Encoder output: (B, S, H) = (32, 49, 256)                    │
-│                                                                  │
-│    Extract [CLS] token at position 0                             │
-│           │                                                      │
-│           │    encoder_output[:, 0, :]                           │
-│           │                                                      │
-│           ▼                                                      │
-│                                                                  │
+│                    CLASSIFICATION HEAD                          │
+│                                                                 │
+│    Encoder output: (B, S, H) = (32, 47, 256)                    │
+│                                                                 │
+│    Extract [CLS] token at position 0                            │
+│           │                                                     │
+│           │    encoder_output[:, 0, :]                          │
+│           │                                                     │
+│           ▼                                                     │
+│                                                                 │
 │    cls_token: (B, H) = (32, 256)                                │
-│           │                                                      │
-│           ▼                                                      │
-│    ┌─────────────────┐                                           │
+│           │                                                     │
+│           ▼                                                     │
+│    ┌─────────────────┐                                          │
 │    │ Linear(H → H)   │   256 → 256                              │
-│    └────────┬────────┘                                           │
-│             │                                                    │
-│             ▼                                                    │
-│    ┌─────────────────┐                                           │
+│    └────────┬────────┘                                          │
+│             │                                                   │
+│             ▼                                                   │
+│    ┌─────────────────┐                                          │
 │    │      GELU       │   Non-linearity                          │
-│    └────────┬────────┘                                           │
-│             │                                                    │
-│             ▼                                                    │
-│    ┌─────────────────┐                                           │
+│    └────────┬────────┘                                          │
+│             │                                                   │
+│             ▼                                                   │
+│    ┌─────────────────┐                                          │
 │    │    Dropout      │   Regularization                         │
-│    └────────┬────────┘                                           │
-│             │                                                    │
-│             ▼                                                    │
-│    ┌─────────────────┐                                           │
+│    └────────┬────────┘                                          │
+│             │                                                   │
+│             ▼                                                   │
+│    ┌─────────────────┐                                          │
 │    │ Linear(H → 1)   │   256 → 1                                │
-│    └────────┬────────┘                                           │
-│             │                                                    │
-│             ▼                                                    │
-│    ┌─────────────────┐                                           │
+│    └────────┬────────┘                                          │
+│             │                                                   │
+│             ▼                                                   │
+│    ┌─────────────────┐                                          │
 │    │    Sigmoid      │   Logit → Probability                    │
-│    └────────┬────────┘                                           │
-│             │                                                    │
-│             ▼                                                    │
-│                                                                  │
+│    └────────┬────────┘                                          │
+│             │                                                   │
+│             ▼                                                   │
+│                                                                 │
 │    Output: P(summit success) ∈ [0, 1]                           │
 │            Shape: (B,) = (32,)                                  │
-│                                                                  │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1199,7 +1199,7 @@ class ClassificationHead(nn.Module):
 ### 10.6 Shape Through Classification Head
 
 ```
-Input:      encoder_output  (B, S, H)     (32, 49, 256)
+Input:      encoder_output  (B, S, H)     (32, 47, 256)
             │
             │ [:, 0, :] — extract position 0
             ▼
@@ -1232,25 +1232,25 @@ Output:     probability     (B,)          (32,)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         DEEPSUMMIT TRANSFORMER                               │
-│                         Complete Data Flow                                   │
-│                                                                              │
+│                         DEEPSUMMIT TRANSFORMER                              │
+│                         Complete Data Flow                                  │
+│                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                        RAW INPUT DATA                                │    │
-│  │                                                                      │    │
+│  │                        RAW INPUT DATA                                │   │
+│  │                                                                      │   │
 │  │   numeric:     (B, 8)   = (32, 8)    — age, altitude, etc.          │    │
 │  │   categorical: (B, 6)   = (32, 6)    — nationality, route, etc.     │    │
 │  │   binary:      (B, 6)   = (32, 6)    — oxygen, commercial, etc.     │    │
 │  │   weather:     (B, 26, 15) = (32, 26, 15) — 26 timesteps × 15 vars  │    │
 │  │   days_before: (B, 26)  = (32, 26)   — temporal position            │    │
 │  │   day_of_year: (B, 26)  = (32, 26)   — calendar position            │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
-│                                 │                                            │
-│                                 ▼                                            │
+│                                 │                                           │
+│                                 ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                       TOKENIZATION                                   │    │
-│  │                                                                      │    │
+│  │                       TOKENIZATION                                   │   │
+│  │                                                                      │   │
 │  │   ┌─────────────────────────────────────────────────────────────┐   │    │
 │  │   │ TabularTokenizer                                            │   │    │
 │  │   │   numeric → 8 Linear projections   → 8 tokens  (B, 8, H)    │   │    │
@@ -1258,102 +1258,100 @@ Output:     probability     (B,)          (32,)
 │  │   │   binary → 6 Embedding lookups      → 6 tokens (B, 6, H)    │   │    │
 │  │   │   Stack → tabular_tokens            → (B, 20, H)            │   │    │
 │  │   └─────────────────────────────────────────────────────────────┘   │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
 │  │   ┌─────────────────────────────────────────────────────────────┐   │    │
 │  │   │ WeatherTokenizer                                            │   │    │
 │  │   │   weather → Linear projection       → (B, 26, H)            │   │    │
 │  │   │   days_before → Time2Vec            → (B, 26, 32)           │   │    │
 │  │   │   day_of_year → Time2Vec            → (B, 26, 32)           │   │    │
 │  │   │   Concat temporal → Project         → (B, 26, H)            │   │    │
-│  │   │   Add weather + temporal            → weather_tokens (B,26,H)│   │    │
+│  │   │   Add weather + temporal            → weather_tokens (B,26,H)│   │   │
 │  │   └─────────────────────────────────────────────────────────────┘   │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
-│                                 │                                            │
-│                                 ▼                                            │
+│                                 │                                           │
+│                                 ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                    SEQUENCE ASSEMBLY                                 │    │
-│  │                                                                      │    │
+│  │                    SEQUENCE ASSEMBLY                                 │   │
+│  │                                                                      │   │
 │  │   [CLS]          → learnable embedding → (1, H)                     │    │
 │  │   tabular_tokens → from tokenizer      → (B, 20, H)                 │    │
-│  │   [SEP]          → learnable embedding → (1, H)                     │    │
 │  │   weather_tokens → from tokenizer      → (B, 26, H)                 │    │
-│  │   [SEP]          → learnable embedding → (1, H)                     │    │
-│  │                                                                      │    │
-│  │   Concatenate: [CLS] + tabular + [SEP] + weather + [SEP]            │    │
-│  │   sequence: (B, 49, H) = (32, 49, 256)                              │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
+│  │   Concatenate: [CLS] + tabular + weather                            │    │
+│  │   sequence: (B, 47, H) = (32, 47, 256)                              │    │
+│  │                                                                      │   │
 │  │   + Modality type embeddings (distinguishes token types)            │    │
-│  │   Final sequence: (B, 49, H)                                        │    │
-│  │                                                                      │    │
+│  │   Final sequence: (B, 47, H)                                        │    │
+│  │                                                                      │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
-│                                 │                                            │
-│                                 ▼                                            │
+│                                 │                                           │
+│                                 ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                    TRANSFORMER ENCODER                               │    │
-│  │                                                                      │    │
+│  │                    TRANSFORMER ENCODER                               │   │
+│  │                                                                      │   │
 │  │   ┌─────────────────────────────────────────────────────────────┐   │    │
-│  │   │                  × 6 Transformer Blocks                      │   │    │
-│  │   │                                                              │   │    │
-│  │   │   Input x: (B, 49, H)                                        │   │    │
-│  │   │       │                                                      │   │    │
-│  │   │       ├────────── residual ──────────┐                       │   │    │
-│  │   │       ▼                              │                       │   │    │
-│  │   │   RMSNorm → Attention → DropPath → + │                       │   │    │
-│  │   │       │                              │                       │   │    │
-│  │   │       ├────────── residual ──────────┤                       │   │    │
-│  │   │       ▼                              │                       │   │    │
-│  │   │   RMSNorm → SwiGLU → DropPath → +    │                       │   │    │
-│  │   │       │                                                      │   │    │
-│  │   │   Output x: (B, 49, H)                                       │   │    │
-│  │   │                                                              │   │    │
+│  │   │                  × 6 Transformer Blocks                      │   │   │
+│  │   │                                                              │   │   │
+│  │   │   Input x: (B, 47, H)                                        │   │   │
+│  │   │       │                                                      │   │   │
+│  │   │       ├────────── residual ──────────┐                       │   │   │
+│  │   │       ▼                              │                       │   │   │
+│  │   │   RMSNorm → Attention → DropPath → + │                       │   │   │
+│  │   │       │                              │                       │   │   │
+│  │   │       ├────────── residual ──────────┤                       │   │   │
+│  │   │       ▼                              │                       │   │   │
+│  │   │   RMSNorm → SwiGLU → DropPath → +    │                       │   │   │
+│  │   │       │                                                      │   │   │
+│  │   │   Output x: (B, 47, H)                                       │   │   │
+│  │   │                                                              │   │   │
 │  │   └─────────────────────────────────────────────────────────────┘   │    │
-│  │                                                                      │    │
-│  │   Final RMSNorm → encoded: (B, 49, H) = (32, 49, 256)               │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
+│  │   Final RMSNorm → encoded: (B, 47, H) = (32, 47, 256)               │    │
+│  │                                                                      │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
-│                                 │                                            │
-│                                 ▼                                            │
+│                                 │                                           │
+│                                 ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                    CLASSIFICATION HEAD                               │    │
-│  │                                                                      │    │
+│  │                    CLASSIFICATION HEAD                               │   │
+│  │                                                                      │   │
 │  │   Extract [CLS]: encoded[:, 0, :] → (B, H) = (32, 256)              │    │
-│  │       │                                                              │    │
-│  │       ▼                                                              │    │
+│  │       │                                                              │   │
+│  │       ▼                                                              │   │
 │  │   Linear(H → H) → GELU → Dropout → (32, 256)                        │    │
-│  │       │                                                              │    │
-│  │       ▼                                                              │    │
+│  │       │                                                              │   │
+│  │       ▼                                                              │   │
 │  │   Linear(H → 1) → Sigmoid → (32, 1) → squeeze → (32,)               │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
 │  └──────────────────────────────┬──────────────────────────────────────┘    │
-│                                 │                                            │
-│                                 ▼                                            │
+│                                 │                                           │
+│                                 ▼                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │                         OUTPUT                                       │    │
-│  │                                                                      │    │
+│  │                         OUTPUT                                       │   │
+│  │                                                                      │   │
 │  │   probability: (B,) = (32,)                                         │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
 │  │   Each value ∈ [0, 1] represents P(summit success)                  │    │
-│  │                                                                      │    │
+│  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                              │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 11.2 Token Sequence Visualization
 
 ```
-Position:    0      1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21
-Token:     [CLS]  n₁  n₂  n₃  n₄  n₅  n₆  n₇  n₈  c₁  c₂  c₃  c₄  c₅  c₆  b₁  b₂  b₃  b₄  b₅  b₆ [SEP]
-Type ID:     0     1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   0
-           ────── ──────────────────────────────────────────────────────────────────────────── ──────
-           Special              Tabular Features (20 tokens)                                  Special
+Position:    0      1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20
+Token:     [CLS]  n₁  n₂  n₃  n₄  n₅  n₆  n₇  n₈  c₁  c₂  c₃  c₄  c₅  c₆  b₁  b₂  b₃  b₄  b₅  b₆
+Type ID:     0     1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1   1
+           ────── ──────────────────────────────────────────────────────────────────────────────
+           Special              Tabular Features (20 tokens)
 
-Position:   22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40  41  42  43  44  45  46  47  48
-Token:      w₁  w₂  w₃  w₄  w₅  w₆  w₇  w₈  w₉ w₁₀ w₁₁ w₁₂ w₁₃ w₁₄ w₁₅ w₁₆ w₁₇ w₁₈ w₁₉ w₂₀ w₂₁ w₂₂ w₂₃ w₂₄ w₂₅ w₂₆ [SEP]
-Type ID:     2   2   2   2   2   2   2   3   3   3   3   3   3   3   3   3   3   4   4   4   4   4   4   4   4   4   0
-           ─────────────────────── ───────────────────────────────────────────── ─────────────────────────────────── ──────
-              7-day weather (7)              30-day weather (10)                        90-day weather (9)            Special
+Position:   21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40  41  42  43  44  45  46
+Token:      w₁  w₂  w₃  w₄  w₅  w₆  w₇  w₈  w₉ w₁₀ w₁₁ w₁₂ w₁₃ w₁₄ w₁₅ w₁₆ w₁₇ w₁₈ w₁₉ w₂₀ w₂₁ w₂₂ w₂₃ w₂₄ w₂₅ w₂₆
+Type ID:     2   2   2   2   2   2   2   3   3   3   3   3   3   3   3   3   3   4   4   4   4   4   4   4   4   4
+           ─────────────────────── ───────────────────────────────────────────── ─────────────────────────────────
+              7-day weather (7)              30-day weather (10)                        90-day weather (9)
 ```
 
 ### 11.3 What Each Token Type Learns
@@ -1362,7 +1360,6 @@ Type ID:     2   2   2   2   2   2   2   3   3   3   3   3   3   3   3   3   3  
 |------|--------|------|
 | [CLS] | 1 | Aggregates global information for classification |
 | Tabular | 20 | Expedition metadata (who, what, when, how) |
-| [SEP] | 2 | Boundary markers between modalities |
 | 7-day weather | 7 | Tactical conditions for summit push |
 | 30-day weather | 10 | Acclimatization period patterns |
 | 90-day weather | 9 | Seasonal context (monsoon, winter storms) |
@@ -1383,13 +1380,13 @@ Type ID:     2   2   2   2   2   2   2   3   3   3   3   3   3   3   3   3   3  
 | | day_of_year | (B, 26) | (32, 26) |
 | **Tokenization** | tabular_tokens | (B, 20, H) | (32, 20, 256) |
 | | weather_tokens | (B, 26, H) | (32, 26, 256) |
-| **Sequence** | full_sequence | (B, 49, H) | (32, 49, 256) |
-| **Encoder** | per_block | (B, 49, H) | (32, 49, 256) |
-| | encoded | (B, 49, H) | (32, 49, 256) |
-| **Attention** | Q, K, V | (B, n_h, S, d_k) | (32, 8, 49, 32) |
-| | scores | (B, n_h, S, S) | (32, 8, 49, 49) |
-| | context | (B, n_h, S, d_k) | (32, 8, 49, 32) |
-| **FFN** | hidden | (B, S, ffn_hidden) | (32, 49, 682) |
+| **Sequence** | full_sequence | (B, 47, H) | (32, 47, 256) |
+| **Encoder** | per_block | (B, 47, H) | (32, 47, 256) |
+| | encoded | (B, 47, H) | (32, 47, 256) |
+| **Attention** | Q, K, V | (B, n_h, S, d_k) | (32, 8, 47, 32) |
+| | scores | (B, n_h, S, S) | (32, 8, 47, 47) |
+| | context | (B, n_h, S, d_k) | (32, 8, 47, 32) |
+| **FFN** | hidden | (B, S, ffn_hidden) | (32, 47, 682) |
 | **Classification** | cls_token | (B, H) | (32, 256) |
 | | logits | (B, 1) | (32, 1) |
 | **Output** | probability | (B,) | (32,) |
@@ -1400,7 +1397,7 @@ Type ID:     2   2   2   2   2   2   2   3   3   3   3   3   3   3   3   3   3  
 |-----------|------------|---------|
 | TabularTokenizer | ~86K | 8×(1×H+H) + Σvocab×H + 6×2×H |
 | WeatherTokenizer | ~70K | 15×H+H + 2×Time2Vec + 64×H |
-| Special tokens | ~0.5K | 2×H |
+| CLS token | ~0.25K | 1×H |
 | Modality embedding | ~1.3K | 5×H |
 | Per TransformerBlock | ~787K | 2×H + 4×H² + 3×H×(8H/3) |
 | × 6 blocks | ~4.7M | |
@@ -1417,7 +1414,7 @@ Type ID:     2   2   2   2   2   2   2   3   3   3   3   3   3   3   3   3   3  
 | Total per block | O(S² · H + S · H²) | Attention + FFN |
 | Full encoder | O(L · (S² · H + S · H²)) | L blocks |
 
-For DeepSummit: S=49, H=256, L=6 → ~140M FLOPs per forward pass.
+For DeepSummit: S=47, H=256, L=6 → ~130M FLOPs per forward pass.
 
 ---
 
